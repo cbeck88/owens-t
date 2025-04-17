@@ -1,0 +1,28 @@
+[package]
+name = "owens-t"
+version = "0.1.0"
+edition = "2024"
+authors = ["Chris Beck <beck.ct@gmail.com>"]
+keywords = ["stats", "math", "numerics", "pdf", "no_std"]
+categories = ["mathematics"]
+description = "Owen's T Function and Bivariate Normal CDF computations"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/cbeck88/owens-t"
+readme = "README.md"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+libm = "0.2.11"
+
+[dev-dependencies]
+assert-within = "0.1.2"
+criterion = { version = "0.4", features = ["html_reports"] }
+rand_pcg = "0.9"
+rand = "0.9"
+
+[[bench]]
+name = "small_fns"
+harness = false
