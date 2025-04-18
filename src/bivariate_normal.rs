@@ -1,4 +1,4 @@
-use crate::{owens_t, util::*};
+use crate::{owens_t_inner, util::*};
 use libm::{asin, erf};
 
 // Compute normal CDF using erf
@@ -95,7 +95,7 @@ pub fn biv_norm_inner(
         //let r_x = (y - rho * x) / (x * sqrt_1_minus_rho_sq);
         //(0.5 * phi_1(x)) - owens_t(x, r_x)
         let r_x = (y * x_recip - rho) * sqrt_1_minus_rho_sq_recip;
-        (0.5 * phi_1_x) - owens_t(x, r_x)
+        (0.5 * phi_1_x) - owens_t_inner(x, r_x, Some((phi_1_x-0.5).abs()))
     };
     let y_contrib = if y == 0.0 {
         0.0
@@ -103,7 +103,7 @@ pub fn biv_norm_inner(
         //let r_y = (x - rho * y) / (y * sqrt_1_minus_rho_sq);
         //(0.5 * phi_1(y)) - owens_t(y, r_y)
         let r_y = (x * y_recip - rho) * sqrt_1_minus_rho_sq_recip;
-        (0.5 * phi_1_y) - owens_t(y, r_y)
+        (0.5 * phi_1_y) - owens_t_inner(y, r_y, Some((phi_1_y-0.5).abs()))
     };
 
     // I know you dont like it clippy, but I just want to follow the paper.
@@ -319,6 +319,8 @@ mod tests {
 
     #[test]
     fn spot_check_phi2() {
+        // FIXME: Precision should be a little better than this, probably we should be more careful with
+        // erf vs. erfc
         let eps = 0.000001;
         for n in 0..N_MAX {
             let x = X_VEC[n];

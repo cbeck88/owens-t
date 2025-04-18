@@ -1,5 +1,5 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use owens_t::owens_t;
+use owens_t::{owens_t, biv_norm};
 use rand::Rng;
 use rand_pcg::{Pcg64Mcg, rand_core::SeedableRng};
 
@@ -129,11 +129,39 @@ fn owens_t_bench2(c: &mut Criterion) {
     });
 }
 
+fn owens_t_bench3(c: &mut Criterion) {
+    let mut rng = Pcg64Mcg::seed_from_u64(9);
+    c.bench_function("owens_t", |b| {
+        b.iter(|| {
+            let arg1: f64 = black_box(rng.random::<f64>());
+            let arg2: f64 = black_box(rng.random::<f64>());
+            let arg3: f64 = black_box(rng.random::<f64>()*10.0 + 1.0);
+            owens_t(arg1 / arg2, arg3)
+        })
+    });
+}
+
+fn biv_norm_bench(c: &mut Criterion) {
+    let mut rng = Pcg64Mcg::seed_from_u64(9);
+    c.bench_function("biv_norm_bench", |b| {
+        b.iter(|| {
+            let arg1: f64 = black_box(rng.random::<f64>());
+            let arg2: f64 = black_box(rng.random::<f64>());
+            let arg3: f64 = black_box(rng.random::<f64>());
+            biv_norm(arg1, arg2, arg3)
+        })
+    });
+}
+
 criterion_group!(
-    benches,
+    builtins,
     div_bench,
     sqrt_bench,
-    exp_bench,
+    exp_bench
+);
+
+criterion_group!(
+    libm,
     atan_bench,
     atan2_bench,
     atan2f_bench,
@@ -141,7 +169,14 @@ criterion_group!(
     erfcf_bench,
     expm1_bench,
     expm1f_bench,
-    owens_t_bench1,
-    owens_t_bench2
 );
-criterion_main!(benches);
+
+criterion_group!(
+    ours,
+    owens_t_bench1,
+    owens_t_bench2,
+    owens_t_bench3,
+    biv_norm_bench
+);
+
+criterion_main!(/*builtins, libm,*/ ours);

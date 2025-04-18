@@ -10,4 +10,4 @@ mod owens_t;
 mod util;
 
 pub use bivariate_normal::{BivNormArg, BivNormRho, biv_norm, biv_norm_inner};
-pub use owens_t::owens_t;
+pub use owens_t::{owens_t, owens_t_inner};

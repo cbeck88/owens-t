@@ -14,7 +14,7 @@ of `libm::erfc`. The cost of bivariate normal cdf computation is two calls to `e
 Quick-start
 -----------
 
-To evaluate `T(h,a) = ∫₀^a exp(½h²·(1+x²)) / (1+x²) dx`:
+To evaluate `T(h,a) = 1/2π · ∫₀^a exp(½h²·(1+x²)) / (1+x²) dx`:
 
 ```rust
 owens_t::owens_t(h,a)
@@ -65,11 +65,12 @@ I had no particular need to get 80 decimals of accuracy, and my goals were to ge
 
 So, I did not implement their modifications to T1, T2, T4. I only implemented classic Patefield-Tandy, and I only did it for `f64`. Then I tested carefully, and measured performance, which was satisfactory for my needs.
 
+Additionally, I found that `biv_norm` computes values of `Φ(x)` that are often recomputed by Patefield-Tandy, so I created an `owens_t_inner` that can optionally forward those values. This modestly accelerates `biv_norm`.
+
 Future Directions
 -----------------
 
 * It would be interesting to have a trait-based API and do it for `f32` also, especially if it can be faster. Or to make the implementation generic over e.g. `num_traits::FloatCore`. Ideally we'd be able to do precision-based specialization similar to `boost::math`.
-* It would be interesting if precomputed values of `Φ(x)` can be forwarded to Owen's T, which typically needs to compute that at some point anyways, and which is already needed by `biv_norm`. This may also make the batch computation using `biv_norm_inner` modestly faster on average.
 * It would be interesting if SIMD instructions can be used to evaluate Owen's T at multiple positions in parallel. (It seems difficult to use SIMD productively for just a single point.) The main stumbling block is, if those positions are not classified to use the same algorithm by the Patefield-Tandy selector, then most likely it won't work. However, if it works often when the inputs are close, it may still be worthwhile. As long as the points are classified to use the same series, it will work, even if the algorithm calls for a larger order for some points than for others. This is one argument in favor of using the `boost::math` "accelerated" series at least some of the time, since `boost::math` is using fewer series on a wider range of inputs.
 
 Licensing and Distribution

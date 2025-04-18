@@ -9,12 +9,23 @@ use libm::{atan, atan2, erf, erfc, expm1};
 ///
 /// Here a is the bounds of integration and h is the parameter to the integrand:
 ///
-/// T(h,a) = 1/2pi * ∫₀^a  exp(-1/2 h^2 (1+x^2)) * 1/(1+x^2) dx
+/// T(h,a) = 1/2π · ∫₀^a exp(½h²·(1+x²)) / (1+x²) dx
 //
 // compute Owen's T function, T(h,a), for arbitrary values of h and a
 //         template<typename RealType, class Policy>
 //         inline RealType owens_t(RealType h, RealType a, const Policy& pol)
-pub fn owens_t(mut h: f64, a: f64) -> f64 {
+pub fn owens_t(h: f64, a: f64) -> f64 {
+    owens_t_inner(h, a, None)
+}
+
+/// Same as `owens_t`, but if you already have an evaluation of znorm1(|h|), then
+/// this will save some cycles in the cases when a >= 1.
+///
+/// Here znorm1(x) := 0.5 · erf (x/sqrt(2))
+/// and `erf` is odd, so |erf(x)| = erf(|x|)
+/// If you know Phi(x) or Phi(-x), where Phi is normal CDF, then you have this number
+/// at least to some accuracy, and can avoid an extra call to erf here.
+pub fn owens_t_inner(mut h: f64, a: f64, znorm1_abs_h: Option<f64>) -> f64 {
     // exploit that T(-h,a) == T(h,a)
     h = h.abs();
 
@@ -27,21 +38,30 @@ pub fn owens_t(mut h: f64, a: f64) -> f64 {
 
     #[allow(clippy::collapsible_else_if)]
     let val: f64 = if fabs_a <= 1.0 {
-        owens_t_dispatch(h, fabs_a, fabs_ah)
+        owens_t_dispatch(h, fabs_a, fabs_ah, None)
     }
     // if(fabs_a <= 1.0)
     else {
         if h <= 0.67 {
-            let normh = owens_t_znorm1(h);
+            let normh = znorm1_abs_h.unwrap_or_else(|| owens_t_znorm1(h));
             let normah = owens_t_znorm1(fabs_ah);
-            0.25 - normh * normah - owens_t_dispatch(fabs_ah, fabs_a.recip(), h)
+            0.25 - normh * normah - owens_t_dispatch(fabs_ah, fabs_a.recip(), h, Some(normh))
         }
         // if( h <= 0.67 )
         else {
             let normh = owens_t_znorm2(h);
             let normah = owens_t_znorm2(fabs_ah);
 
-            0.5 * (normh + normah) - normh * normah - owens_t_dispatch(fabs_ah, fabs_a.recip(), h)
+            // TODO: Is 0.5 - znorm2 = znorm1 reasonable here?
+            // It seems like it should be fine but it's not what tatefield pandy did, maybe it loses some precision.
+            //
+            // In testing, haven't been able to find precision loss for large a and h when we do this, I think it's fine because
+            // even if we lose some precision, this is only used to initialize some of the series computation, so the
+            // lower order bits gets lost anyways.
+            let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| 0.5 - normh);
+            //let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| owens_t_znorm1(h));
+
+            0.5 * (normh + normah) - normh * normah - owens_t_dispatch(fabs_ah, fabs_a.recip(), h, Some(znorm1_abs_h))
         } // else [if( h <= 0.67 )]
     }; // else [if(fabs_a <= 1)]
 
@@ -51,12 +71,8 @@ pub fn owens_t(mut h: f64, a: f64) -> f64 {
 
 // This routine dispatches the call to one of six subroutines, depending on the values
 // of h and a.
-// preconditions: h >= 0, 0<=a<=1, ah=a*h
-//
-// Note there are different versions for different precisions....
-// template<typename RealType, typename Policy>
-// inline RealType owens_t_dispatch(const RealType h, const RealType a, const RealType ah, const Policy& pol, std::integral_constant<int, 64> const&)
-fn owens_t_dispatch(h: f64, a: f64, ah: f64) -> f64 {
+// preconditions: h >= 0, 0<=a<=1, ah=a*h, znorm1_ah = owens_t_znorm1(ah) if present
+fn owens_t_dispatch(h: f64, a: f64, ah: f64, znorm1_ah: Option<f64>) -> f64 {
     // Simple main case for 64-bit precision or less, this is as per the Patefield-Tandy paper:
     //
     // Handle some special cases first, these are from
@@ -82,8 +98,8 @@ fn owens_t_dispatch(h: f64, a: f64, ah: f64) -> f64 {
 
     match method {
         1 => owens_t_T1(h, a, m),
-        2 => owens_t_T2(h, a, m, ah),
-        3 => owens_t_T3(h, a, ah),
+        2 => owens_t_T2(h, a, m, ah, znorm1_ah.unwrap_or_else(|| owens_t_znorm1(ah))),
+        3 => owens_t_T3(h, a, ah, znorm1_ah.unwrap_or_else(|| owens_t_znorm1(ah))),
         4 => owens_t_T4(h, a, m),
         5 => owens_t_T5(h, a),
         6 => owens_t_T6(h, a),
@@ -105,7 +121,7 @@ fn owens_t_znorm2(x: f64) -> f64 {
 
 // compute the value of Owen's T function with method T1 from the reference paper
 pub(crate) fn owens_t_T1(h: f64, a: f64, m: u16) -> f64 {
-    let hs = -h * h * 0.5;
+    let hs = -0.5 * (h * h);
     let dhs = exp(hs);
     let a2 = a * a;
 
@@ -133,7 +149,7 @@ pub(crate) fn owens_t_T1(h: f64, a: f64, m: u16) -> f64 {
 }
 
 // compute the value of Owen's T function with method T2 from the reference paper
-pub(crate) fn owens_t_T2(h: f64, a: f64, m: u16, ah: f64) -> f64 {
+pub(crate) fn owens_t_T2(h: f64, a: f64, m: u16, ah: f64, znorm1_ah: f64) -> f64 {
     let maxii = m + m + 1;
     let hs = h * h;
     let a2 = -a * a;
@@ -141,13 +157,13 @@ pub(crate) fn owens_t_T2(h: f64, a: f64, m: u16, ah: f64) -> f64 {
 
     let mut ii = 1;
     let mut val = 0.0;
-    let mut vi = a * exp(-ah * ah * 0.5) * ONE_DIV_ROOT_TWO_PI;
-    let mut z = owens_t_znorm1(ah) / h;
+    let mut vi = a * exp(-0.5 * (ah * ah)) * ONE_DIV_ROOT_TWO_PI;
+    let mut z = znorm1_ah / h;
 
     loop {
         val += z;
         if maxii <= ii {
-            val *= exp(-hs * 0.5) * ONE_DIV_ROOT_TWO_PI;
+            val *= exp(-0.5 * hs) * ONE_DIV_ROOT_TWO_PI;
             return val;
         } // if( maxii <= ii )
         z = y * (vi - (ii as f64) * z);
@@ -159,7 +175,7 @@ pub(crate) fn owens_t_T2(h: f64, a: f64, m: u16, ah: f64) -> f64 {
 // compute the value of Owen's T function with method T3 from the reference paper
 // template<class RealType, class Policy>
 // inline RealType owens_t_T3_imp(const RealType h, const RealType a, const RealType ah, const std::integral_constant<int, 64>&, const Policy& pol)
-pub(crate) fn owens_t_T3(h: f64, a: f64, ah: f64) -> f64 {
+pub(crate) fn owens_t_T3(h: f64, a: f64, ah: f64, znorm1_ah: f64) -> f64 {
     const M: usize = 30;
 
     const C2: [f64; M + 1] = [
@@ -201,8 +217,8 @@ pub(crate) fn owens_t_T3(h: f64, a: f64, ah: f64) -> f64 {
     let y = hs.recip();
 
     let mut ii = 1.0;
-    let mut vi = a * exp(-ah * ah * 0.5) * ONE_DIV_ROOT_TWO_PI;
-    let mut zi = owens_t_znorm1(ah) / h;
+    let mut vi = a * exp(-0.5 * (ah * ah)) * ONE_DIV_ROOT_TWO_PI;
+    let mut zi = znorm1_ah / h;
     let mut val = 0.0;
 
     let mut i = 0;
@@ -210,7 +226,7 @@ pub(crate) fn owens_t_T3(h: f64, a: f64, ah: f64) -> f64 {
         debug_assert!(i < 31);
         val += zi * C2[i];
         if M <= i {
-            val *= exp(-hs * 0.5) * ONE_DIV_ROOT_TWO_PI;
+            val *= exp(-0.5 * hs) * ONE_DIV_ROOT_TWO_PI;
             return val;
         }
         zi = y * (ii * zi - vi);
@@ -229,7 +245,7 @@ pub(crate) fn owens_t_T4(h: f64, a: f64, m: u16) -> f64 {
     let a2 = -a * a;
 
     let mut ii: u16 = 1;
-    let mut ai = a * exp(-hs * (1.0 - a2) * 0.5) * ONE_DIV_TWO_PI;
+    let mut ai = a * exp(-0.5 * hs * (1.0 - a2)) * ONE_DIV_TWO_PI;
     let mut yi = 1.0;
     let mut val = 0.0;
 
@@ -302,7 +318,7 @@ pub(crate) fn owens_t_T5(h: f64, a: f64) -> f64 {
     ];
 
     let a2 = a * a;
-    let hs = -h * h * 0.5;
+    let hs = -0.5 * h * h;
 
     let mut val = 0.0;
     for i in 0..M {
@@ -324,7 +340,7 @@ pub(crate) fn owens_t_T6(h: f64, a: f64) -> f64 {
     let mut val = normh * (1.0 - normh) * 0.5;
 
     if r != 0.0 {
-        val -= r * exp(-y * h * h * 0.5 / r) * ONE_DIV_TWO_PI;
+        val -= r * exp(-0.5 * y * (h * h) / r) * ONE_DIV_TWO_PI;
     }
 
     val
@@ -441,26 +457,96 @@ mod tests {
     #[test]
     fn compare_with_T7() {
         for h in [
-            0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0,
+            0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0
         ] {
             for a in [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95] {
                 assert_within!(+1e-16, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
-            }
-
-            for a in [0.005, 0.01, 0.99, 0.995] {
-                assert_within!(+1e-10, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
             }
         }
     }
 
     #[test]
+    fn compare_with_T7_extreme_a() {
+        for h in [
+            0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5
+        ] {
+            for a in [0.005, 0.01, 0.99, 0.995] {
+                assert_within!(+1e-16, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
+            }
+        }
+
+        for h in [
+            1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0
+        ] {
+            // TODO: Figure out why these have less agreement, maybe using T7 wrong...
+            // or maybe T7 just isn't accurate here, we appear to agree with wolfram alpha on these points
+            {
+                let a = 0.005;
+                assert_within!(+1e-12, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
+            }
+
+            {
+                let a = 0.01;
+                assert_within!(+1e-10, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
+            }
+
+            for a in [0.99, 0.995, 0.999] {
+                assert_within!(+1e-16, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
+            }
+
+        }
+    }
+
+    #[test]
     fn spot_check_owen_t() {
-        let eps = 0.000000001;
+        let eps = 1e-16;
         // These values from wolframalpha OwenT function
-        assert_within!(+eps, owens_t(4.0, 1.0), 0.0000158351);
-        assert_within!(+eps, owens_t(3.0, 1.0), 0.000674038);
-        assert_within!(+eps, owens_t(2.0, 1.0), 0.0111162817);
-        assert_within!(+eps, owens_t(1.0, 1.0), 0.0667418821657);
-        assert_within!(+eps, owens_t(0.0, 0.0), 0.0);
+        assert_within!(+eps, owens_t(4.0, 1.0), 0.00001583511938278);
+        assert_within!(+eps, owens_t(3.0, 1.0), 0.00067403790346715);
+        assert_within!(+eps, owens_t(2.0, 1.0), 0.01111628172225982);
+        assert_within!(+eps, owens_t(1.0, 1.0), 0.06674188216570097);
+        assert_within!(+eps, owens_t(0.0, 1.0), 0.125);
+        assert_within!(+eps, owens_t(-1.0, 1.0), 0.06674188216570097);
+        assert_within!(+eps, owens_t(-2.0, 1.0), 0.01111628172225982);
+        assert_within!(+eps, owens_t(-3.0, 1.0), 0.00067403790346715);
+        assert_within!(+eps, owens_t(-4.0, 1.0), 0.00001583511938278);
+        assert_within!(+eps, owens_t(0.25, 0.25), 0.03776579074789887);
+        assert_within!(+eps, owens_t(0.35, 0.25), 0.03662713104215306);
+        assert_within!(+eps, owens_t(0.45, 0.25), 0.03516215929701228);
+        assert_within!(+eps, owens_t(0.55, 0.25), 0.03341309193133329);
+        assert_within!(+eps, owens_t(0.65, 0.25), 0.03142870674717572);
+        assert_within!(+eps, owens_t(0.75, 0.25), 0.02926208986224979);
+        assert_within!(+eps, owens_t(0.85, 0.25), 0.02696829336798952);
+        assert_within!(+eps, owens_t(0.95, 0.25), 0.02460204670946997);
+
+        // These are values from Wolfram alpha at locations where at some point
+        // disagreed with T7
+        assert_within!(+eps, owens_t(1.0, 0.05), 0.00482059414583312869);
+        assert_within!(+eps, owens_t(1.0, 0.01), 0.00096527526326129856);
+        assert_within!(+eps, owens_t(1.0, 0.005), 0.00048265572997626906);
+        assert_within!(+eps, owens_t(2.0, 0.05), 0.00107427827101219616);
+        assert_within!(+eps, owens_t(2.0, 0.01), 0.00021537125589291752);
+        assert_within!(+eps, owens_t(2.0, 0.005), 0.00010769370416663914);
+
+        let eps = 1e-14;
+        assert_within!(~eps, owens_t(5.0, 0.05), 2.93255054168372620347e-8);
+        assert_within!(~eps, owens_t(5.0, 0.01), 5.92848480305363926081e-9);
+        assert_within!(~eps, owens_t(5.0, 0.005), 2.96524277424805823103e-9);
+        assert_within!(~eps, owens_t(10.0, 0.05), 1.4720412827780475392e-24);
+        assert_within!(~eps, owens_t(10.0, 0.01), 3.06449020934741106603e-25);
+        assert_within!(~eps, owens_t(10.0, 0.005), 1.5341982995816032882e-25);
+    }
+
+    #[test]
+    fn spot_check_owen_t_large_a() {
+        let eps = 1e-16;
+        assert_within!(+eps, owens_t(1.0, 10.0), 0.079327626965728525707);
+        assert_within!(+eps, owens_t(1.1, 10.0), 0.067833030473191337587);
+        assert_within!(+eps, owens_t(1.2, 10.0), 0.057534835110854134011);
+        assert_within!(+eps, owens_t(1.5, 10.0), 0.033403600634429033002);
+        assert_within!(+eps, owens_t(2.0, 10.0), 0.011375065974089603600);
+        let eps = 1e-14;
+        assert_within!(~eps, owens_t(5.0, 10.0), 1.433257859395969558369e-7);
+        assert_within!(~eps, owens_t(10.0, 10.0), 3.809926512080263032987e-24);
     }
 }
