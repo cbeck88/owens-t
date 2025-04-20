@@ -9,11 +9,11 @@ fn one_minus_phi(x: f64) -> f64 {
     0.5 * erfc(x * FRAC_1_SQRT_2)
 }
 
-/// Compute bivariate normal CDF, using owens' t.
+/// Compute bivariate normal CDF, using Owens' T function.
 /// This is Pr[ X > x, Y > y] when X and Y are standard normals of correlation coefficient `rho`.
 ///
-/// Accurate to ~10 decimals for x * y > 0.0
-/// Only 6 or 7 decimals when one or both are negative.
+/// Accurate to ~15 decimals for x * y > 0.0
+/// Only 6 or 7 decimals when x * y < 0.0
 ///
 /// Preconditions:
 ///   -1 <= rho <= 1
@@ -88,11 +88,10 @@ pub fn biv_norm_inner(
     if rho == 0.0 {
         return one_minus_phi_x * one_minus_phi_y;
     } else if rho == 1.0 {
-        // return phi_1(f64::min(x, y));
         return if x < y {
-            one_minus_phi_x
-        } else {
             one_minus_phi_y
+        } else {
+            one_minus_phi_x
         };
     } else if rho == -1.0 {
         return f64::max(one_minus_phi_x + one_minus_phi_y - 1.0, 0.0);
