@@ -1,6 +1,6 @@
 [package]
 name = "owens-t"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Chris Beck <beck.ct@gmail.com>"]
 keywords = ["stats", "math", "numerics", "pdf", "no_std"]
