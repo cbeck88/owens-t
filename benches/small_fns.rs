@@ -1,5 +1,5 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use owens_t::{owens_t, biv_norm};
+use owens_t::{biv_norm, owens_t};
 use rand::Rng;
 use rand_pcg::{Pcg64Mcg, rand_core::SeedableRng};
 
@@ -135,7 +135,7 @@ fn owens_t_bench3(c: &mut Criterion) {
         b.iter(|| {
             let arg1: f64 = black_box(rng.random::<f64>());
             let arg2: f64 = black_box(rng.random::<f64>());
-            let arg3: f64 = black_box(rng.random::<f64>()*10.0 + 1.0);
+            let arg3: f64 = black_box(rng.random::<f64>() * 10.0 + 1.0);
             owens_t(arg1 / arg2, arg3)
         })
     });
@@ -153,12 +153,7 @@ fn biv_norm_bench(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    builtins,
-    div_bench,
-    sqrt_bench,
-    exp_bench
-);
+criterion_group!(builtins, div_bench, sqrt_bench, exp_bench);
 
 criterion_group!(
     libm,

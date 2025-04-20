@@ -1,4 +1,7 @@
-use crate::{owens_t::{owens_t_dispatch, owens_t_znorm1, owens_t_znorm2}, util::*};
+use crate::{
+    owens_t::{owens_t_dispatch, owens_t_znorm1, owens_t_znorm2},
+    util::*,
+};
 use libm::{asin, erfc};
 
 // Compute 1 - normal CDF using erf
@@ -86,7 +89,11 @@ pub fn biv_norm_inner(
         return one_minus_phi_x * one_minus_phi_y;
     } else if rho == 1.0 {
         // return phi_1(f64::min(x, y));
-        return if x < y { one_minus_phi_x } else { one_minus_phi_y };
+        return if x < y {
+            one_minus_phi_x
+        } else {
+            one_minus_phi_y
+        };
     } else if rho == -1.0 {
         return f64::max(one_minus_phi_x + one_minus_phi_y - 1.0, 0.0);
     };
@@ -94,20 +101,20 @@ pub fn biv_norm_inner(
     // Nonzero
     // let sqrt_1_minus_rho_sq = (1.0 - rho * rho).sqrt();
 
-// Here, q_x = Q(x, a_x)
-// In notation of Owen '56, equation 2.1.
-// See also Pages 15-16 of Patefield Tandy.
-//
-// Or see section 2 of: https://www.scirp.org/journal/paperinformation?paperid=128377
-// although beware because they invert the CDF, so x must be negated etc.
-//
-// Read Patefield Tandy closely:
-// > Care should be taken when computing (11) as, although the function T is accurate to at least
-// > 14 significant figures, the subtraction can lead to a loss of relative accuracy in computing Q
-// > and hence in the resultant bivariate normal probability
-//
-// To do what they are saying, we don't call `owens_t` as a black-box, instead we build a function that
-// computes Q, which calls owens_t_dispatch directly.
+    // Here, q_x = Q(x, a_x)
+    // In notation of Owen '56, equation 2.1.
+    // See also Pages 15-16 of Patefield Tandy.
+    //
+    // Or see section 2 of: https://www.scirp.org/journal/paperinformation?paperid=128377
+    // although beware because they invert the CDF, so x must be negated etc.
+    //
+    // Read Patefield Tandy closely:
+    // > Care should be taken when computing (11) as, although the function T is accurate to at least
+    // > 14 significant figures, the subtraction can lead to a loss of relative accuracy in computing Q
+    // > and hence in the resultant bivariate normal probability
+    //
+    // To do what they are saying, we don't call `owens_t` as a black-box, instead we build a function that
+    // computes Q, which calls owens_t_dispatch directly.
     let (q_x, c_x) = if x == 0.0 {
         (0.0, 0.0)
     } else {
@@ -133,9 +140,11 @@ pub fn biv_norm_inner(
 
     let beta = if (x * y) > 0.0 {
         0.0
-    } else if (x*y) < 0.0 {
+    } else if (x * y) < 0.0 {
         0.5
-    } else if /*(x == 0.0 || y== 0.0) &&*/ x + y >= 0.0 {
+    } else if
+    /*(x == 0.0 || y== 0.0) &&*/
+    x + y >= 0.0 {
         -0.5
     } else {
         0.0
@@ -144,7 +153,10 @@ pub fn biv_norm_inner(
     // The correction factors always add up to 0.0 or 0.5
     debug_assert!(c_x + c_y - beta == 0.5 || c_x + c_y - beta == 0.0);
     // If x == 0 or y == 0, then the correction factors add up to 0.0
-    debug_assert!(x*y != 0.0 || c_x + c_y - beta == 0.0, "{x}, {y}, {c_x}, {c_y}, {beta}");
+    debug_assert!(
+        x * y != 0.0 || c_x + c_y - beta == 0.0,
+        "{x}, {y}, {c_x}, {c_y}, {beta}"
+    );
 
     q_x + q_y + (c_x + c_y - beta)
 }
@@ -154,7 +166,7 @@ pub fn biv_norm_inner(
 //
 // Ours is different in that, the possible 1/2 correction factor is held on the side
 // to prevent loss of precision.
-fn q(h:f64, a:f64, one_minus_phi_h: f64) -> (f64, f64) {
+fn q(h: f64, a: f64, one_minus_phi_h: f64) -> (f64, f64) {
     let s_a = a.signum();
     let h_abs = h.abs();
     let a_abs = a.abs();
@@ -168,7 +180,10 @@ fn q(h:f64, a:f64, one_minus_phi_h: f64) -> (f64, f64) {
         // Their equation is valid for all h and a, but owens_t_dispatch has requirements.
         // We're using T(-h, a) = T(h, a)
         // and T(h, -a) = -T(h, a)
-        ( 0.5 * one_minus_phi_h - (s_a * owens_t_dispatch(h_abs, a_abs, ah_abs, None)), 0.0)
+        (
+            0.5 * one_minus_phi_h - (s_a * owens_t_dispatch(h_abs, a_abs, ah_abs, None)),
+            0.0,
+        )
     } else {
         // Patefield-Tandy page 16, citing Owens (2.3):
         //
@@ -186,7 +201,11 @@ fn q(h:f64, a:f64, one_minus_phi_h: f64) -> (f64, f64) {
         let phi_h_minus_half = owens_t_znorm1(h);
         let one_minus_phi_ah = owens_t_znorm2(a * h);
         let one_half_if_a_negative = (s_a - 1.0) * -0.25;
-        ((s_a * owens_t_dispatch(ah_abs, a_abs.recip(), h_abs, Some(phi_h_minus_half))) - phi_h_minus_half * one_minus_phi_ah, one_half_if_a_negative)
+        (
+            (s_a * owens_t_dispatch(ah_abs, a_abs.recip(), h_abs, Some(phi_h_minus_half)))
+                - phi_h_minus_half * one_minus_phi_ah,
+            one_half_if_a_negative,
+        )
     }
 }
 
@@ -398,14 +417,15 @@ mod tests {
             let val = biv_norm(x, y, r);
 
             // FIXME: Precision should be a little better than this...
-            let eps = if x > 0.0 && y > 0.0  {
-                0.0000000001
+            // I strongly suspect these test vectors, since tvpack agrees with this one.
+            let eps = if x > 0.0 && y > 0.0 {
+                1e-10
             } else if x == 0.0 || y == 0.0 {
-                0.000001
+                1e-6
             } else if x < 0.0 && y < 0.0 {
-                0.000000001
+                1e-9
             } else {
-                0.0000001
+                1e-7
             };
             //eprintln!("n = {n}: biv_norm({x}, {y}, {r}) = {val}: expected: {fxy}");
             assert_within!(~eps, biv_norm(y,x,r), val);

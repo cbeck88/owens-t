@@ -71,7 +71,9 @@ pub fn owens_t_inner(mut h: f64, a: f64, znorm1_abs_h: Option<f64>) -> f64 {
             //let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| 0.5 - normh);
             let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| owens_t_znorm1(h));
 
-            0.5 * (normh + normah) - normh * normah - owens_t_dispatch(fabs_ah, fabs_a.recip(), h, Some(znorm1_abs_h))
+            0.5 * (normh + normah)
+                - normh * normah
+                - owens_t_dispatch(fabs_ah, fabs_a.recip(), h, Some(znorm1_abs_h))
         } // else [if( h <= 0.67 )]
     }; // else [if(fabs_a <= 1)]
 
@@ -83,7 +85,7 @@ pub fn owens_t_inner(mut h: f64, a: f64, znorm1_abs_h: Option<f64>) -> f64 {
 // of h and a.
 // preconditions: h >= 0, 0<=a<=1, ah=a*h, znorm1_ah = owens_t_znorm1(ah) if present
 #[inline]
-pub (crate) fn owens_t_dispatch(h: f64, a: f64, ah: f64, znorm1_ah: Option<f64>) -> f64 {
+pub(crate) fn owens_t_dispatch(h: f64, a: f64, ah: f64, znorm1_ah: Option<f64>) -> f64 {
     // Simple main case for 64-bit precision or less, this is as per the Patefield-Tandy paper:
     //
     // Handle some special cases first, these are from
@@ -121,12 +123,12 @@ pub (crate) fn owens_t_dispatch(h: f64, a: f64, ah: f64, znorm1_ah: Option<f64>)
 }
 
 #[inline(always)]
-pub (crate) fn owens_t_znorm1(x: f64) -> f64 {
+pub(crate) fn owens_t_znorm1(x: f64) -> f64 {
     0.5 * erf(x * FRAC_1_SQRT_2)
 }
 
 #[inline(always)]
-pub (crate) fn owens_t_znorm2(x: f64) -> f64 {
+pub(crate) fn owens_t_znorm2(x: f64) -> f64 {
     0.5 * erfc(x * FRAC_1_SQRT_2)
 }
 
@@ -468,7 +470,8 @@ mod tests {
     #[test]
     fn compare_with_T7() {
         for h in [
-            0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0
+            0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0,
+            100.0, 200.0, 500.0, 1000.0,
         ] {
             for a in [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95] {
                 assert_within!(+1e-16, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
@@ -478,17 +481,13 @@ mod tests {
 
     #[test]
     fn compare_with_T7_extreme_a() {
-        for h in [
-            0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5
-        ] {
+        for h in [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5] {
             for a in [0.005, 0.01, 0.99, 0.995] {
                 assert_within!(+1e-16, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
             }
         }
 
-        for h in [
-            1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0
-        ] {
+        for h in [1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0] {
             // TODO: Figure out why these have less agreement, maybe using T7 wrong...
             // or maybe T7 just isn't accurate here, we appear to agree with wolfram alpha on these points
             {
@@ -504,7 +503,6 @@ mod tests {
             for a in [0.99, 0.995, 0.999] {
                 assert_within!(+1e-16, owens_t(h, a), owens_t_T7(h, a), "h = {h}, a = {a}");
             }
-
         }
     }
 
