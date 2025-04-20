@@ -6,10 +6,13 @@ This crate provides an implementation of:
  * [Owen's T function](https://en.wikipedia.org/wiki/Owen%27s_T_function)
  * The [bivariate normal CDF](https://en.wikipedia.org/wiki/Multivariate_normal_distribution) (using Owen's T)
  
-These are accurate to about 9-10 decimals in my testing.
+The Owen's T implementaiton is accurate to about 16 decimals.
+The bivariate normal CDF is accurate to about 9-10 decimals in my testing.
 
-On my x86 hardware, the cost of Owen's T is a little under 3x the cost
+On my x86-64 hardware, the cost of Owen's T is typically about 3x the cost
 of `libm::erfc`. The cost of bivariate normal cdf computation is two calls to `erfc` and two calls to `owens_t`.
+
+Owen's T can also be used to compute the CDF of the [skew-normal distribution](https://en.wikipedia.org/wiki/Skew_normal_distribution).
 
 Quick-start
 -----------

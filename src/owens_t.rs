@@ -10,10 +10,13 @@ use libm::{atan, atan2, erf, erfc, expm1};
 /// Here a is the bounds of integration and h is the parameter to the integrand:
 ///
 /// T(h,a) = 1/2π · ∫₀^a exp(½h²·(1+x²)) / (1+x²) dx
+///
+/// Accurate to 14 decimals
 //
 // compute Owen's T function, T(h,a), for arbitrary values of h and a
 //         template<typename RealType, class Policy>
 //         inline RealType owens_t(RealType h, RealType a, const Policy& pol)
+#[inline]
 pub fn owens_t(h: f64, a: f64) -> f64 {
     owens_t_inner(h, a, None)
 }
@@ -25,13 +28,20 @@ pub fn owens_t(h: f64, a: f64) -> f64 {
 /// and `erf` is odd, so |erf(x)| = erf(|x|)
 /// If you know Phi(x) or Phi(-x), where Phi is normal CDF, then you have this number
 /// at least to some accuracy, and can avoid an extra call to erf here.
+#[inline]
 pub fn owens_t_inner(mut h: f64, a: f64, znorm1_abs_h: Option<f64>) -> f64 {
     // exploit that T(-h,a) == T(h,a)
     h = h.abs();
 
     // Use equation (2) in the paper to remap the arguments
     // such that h>=0 and 0<=a<=1 for the call of the actual
-    // computation routine.
+    // computation routine:
+    //
+    // T(h, -a) = - T(h, a)
+    // T(-h, a) = T(h, a)
+    // T(h,a) = 1/2 Phi(h) + 1/2 Phi(ah) - Phi(h) Phi(ah) - T(ah, 1/a)
+    //
+    // where Phi is standard normal cdf.
 
     let fabs_a = a.abs();
     let fabs_ah = fabs_a * h;
@@ -58,8 +68,8 @@ pub fn owens_t_inner(mut h: f64, a: f64, znorm1_abs_h: Option<f64>) -> f64 {
             // In testing, haven't been able to find precision loss for large a and h when we do this, I think it's fine because
             // even if we lose some precision, this is only used to initialize some of the series computation, so the
             // lower order bits gets lost anyways.
-            let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| 0.5 - normh);
-            //let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| owens_t_znorm1(h));
+            //let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| 0.5 - normh);
+            let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| owens_t_znorm1(h));
 
             0.5 * (normh + normah) - normh * normah - owens_t_dispatch(fabs_ah, fabs_a.recip(), h, Some(znorm1_abs_h))
         } // else [if( h <= 0.67 )]
@@ -72,7 +82,8 @@ pub fn owens_t_inner(mut h: f64, a: f64, znorm1_abs_h: Option<f64>) -> f64 {
 // This routine dispatches the call to one of six subroutines, depending on the values
 // of h and a.
 // preconditions: h >= 0, 0<=a<=1, ah=a*h, znorm1_ah = owens_t_znorm1(ah) if present
-fn owens_t_dispatch(h: f64, a: f64, ah: f64, znorm1_ah: Option<f64>) -> f64 {
+#[inline]
+pub (crate) fn owens_t_dispatch(h: f64, a: f64, ah: f64, znorm1_ah: Option<f64>) -> f64 {
     // Simple main case for 64-bit precision or less, this is as per the Patefield-Tandy paper:
     //
     // Handle some special cases first, these are from
@@ -110,12 +121,12 @@ fn owens_t_dispatch(h: f64, a: f64, ah: f64, znorm1_ah: Option<f64>) -> f64 {
 }
 
 #[inline(always)]
-fn owens_t_znorm1(x: f64) -> f64 {
+pub (crate) fn owens_t_znorm1(x: f64) -> f64 {
     0.5 * erf(x * FRAC_1_SQRT_2)
 }
 
 #[inline(always)]
-fn owens_t_znorm2(x: f64) -> f64 {
+pub (crate) fn owens_t_znorm2(x: f64) -> f64 {
     0.5 * erfc(x * FRAC_1_SQRT_2)
 }
 

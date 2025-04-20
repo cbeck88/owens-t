@@ -19,9 +19,9 @@ checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
 name = "assert-within"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfc7213f76b32acfe60e61a52b4bff7cd0d1be915b03a71b646bd83778a6e362"
+checksum = "b61fc7f26e7a391a51b079174f390db530e79522928ddaa0e588f04f474dccba"
 dependencies = [
  "num-traits",
 ]
