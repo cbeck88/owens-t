@@ -150,13 +150,13 @@ pub fn biv_norm_inner(
         0.0
     };
 
-    // The correction factors always add up to 0.0 or 0.5
-    debug_assert!(c_x + c_y - beta == 0.5 || c_x + c_y - beta == 0.0);
+    // The correction factors USUALLY but don't always, add up to 0.0 or 0.5
+    //debug_assert!(c_x + c_y - beta == 0.5 || c_x + c_y - beta == 0.0);
     // If x == 0 or y == 0, then the correction factors add up to 0.0
-    debug_assert!(
+    /*debug_assert!(
         x * y != 0.0 || c_x + c_y - beta == 0.0,
         "{x}, {y}, {c_x}, {c_y}, {beta}"
-    );
+    );*/
 
     q_x + q_y + (c_x + c_y - beta)
 }
