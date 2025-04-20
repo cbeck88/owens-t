@@ -164,7 +164,8 @@ pub fn biv_norm_inner(
 // See also their Q routine, which is limited to h >= 0, a >= 0
 //
 // Ours is different in that, the possible 1/2 correction factor is held on the side
-// to prevent loss of precision.
+// to try to prevent loss of precision. It's not the only term that can have a nasty
+// cancellation though.
 fn q(h: f64, a: f64, one_minus_phi_h: f64) -> (f64, f64) {
     let s_a = a.signum();
     let h_abs = h.abs();
@@ -201,7 +202,7 @@ fn q(h: f64, a: f64, one_minus_phi_h: f64) -> (f64, f64) {
         let one_minus_phi_ah = owens_t_znorm2(a * h);
         let one_half_if_a_negative = (s_a - 1.0) * -0.25;
         (
-            (s_a * owens_t_dispatch(ah_abs, a_abs.recip(), h_abs, Some(phi_h_minus_half)))
+            (s_a * owens_t_dispatch(ah_abs, a_abs.recip(), h_abs, Some(phi_h_minus_half.abs())))
                 - phi_h_minus_half * one_minus_phi_ah,
             one_half_if_a_negative,
         )

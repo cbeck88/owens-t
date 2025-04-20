@@ -63,11 +63,11 @@ pub fn owens_t_inner(mut h: f64, a: f64, znorm1_abs_h: Option<f64>) -> f64 {
             let normah = owens_t_znorm2(fabs_ah);
 
             // TODO: Is 0.5 - znorm2 = znorm1 reasonable here?
-            // It seems like it should be fine but it's not what tatefield pandy did, maybe it loses some precision.
+            // It seems like it should be fine but it's not what patefield tandy did, maybe it loses some precision.
             //
             // In testing, haven't been able to find precision loss for large a and h when we do this, I think it's fine because
             // even if we lose some precision, this is only used to initialize some of the series computation, so the
-            // lower order bits gets lost anyways.
+            // lower order bits probably get lost anyways.
             //let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| 0.5 - normh);
             let znorm1_abs_h = znorm1_abs_h.unwrap_or_else(|| owens_t_znorm1(h));
 
