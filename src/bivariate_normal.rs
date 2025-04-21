@@ -156,14 +156,6 @@ pub fn biv_norm_inner(
         0.0
     };
 
-    // The correction factors USUALLY but don't always, add up to 0.0 or 0.5
-    //debug_assert!(c_x + c_y - beta == 0.5 || c_x + c_y - beta == 0.0);
-    // If x == 0 or y == 0, then the correction factors add up to 0.0
-    /*debug_assert!(
-        x * y != 0.0 || c_x + c_y - beta == 0.0,
-        "{x}, {y}, {c_x}, {c_y}, {beta}"
-    );*/
-
     q_x + q_y + (c_x + c_y - beta)
 }
 
@@ -196,7 +188,7 @@ fn q(h: f64, a: f64, one_minus_phi_h: f64) -> (f64, f64) {
         //
         // Q(h, a) = T(ah, 1/a) - (Phi(h) - 1/2)(1- Phi(ah))
         //
-        // This is also valid for a > 0 and h,
+        // This is valid for a > 0 and h,
         // but see Owens (3.5) for the correction factor, when a is negative:
         //
         // Q(h, a) = T(ah, 1/a) - (Phi(h) - 1/2)(1- Phi(ah)) + 1/2
@@ -205,7 +197,16 @@ fn q(h: f64, a: f64, one_minus_phi_h: f64) -> (f64, f64) {
         //
         // T(ah, 1/a)
         // = signum(a) * T(|ah|, |1/a|)
-        let phi_h_minus_half = owens_t_znorm1(h);
+        //
+        // For large h, we can use erf(h/sqrt(2)) = 1 - erfc(h/sqrt(2))
+        // and won't lose precision, since erf will be large anyways, and save some cycles.
+        // For small h, we should recompute erf to get the low order decimals right.
+        // This is the same threshold for h that boost::math owens impl was using.
+        let phi_h_minus_half = if h_abs <= 0.67 {
+            owens_t_znorm1(h)
+        } else {
+            0.5 - one_minus_phi_h
+        };
         let one_minus_phi_ah = owens_t_znorm2(a * h);
         let one_half_if_a_negative = (s_a - 1.0) * -0.25;
         (
@@ -243,7 +244,7 @@ mod tests {
             let val = biv_norm(x, y, r);
 
             // FIXME: Precision should be a little better than this...
-            // I strongly suspect these test vectors, since tvpack agrees with this one.
+            // I strongly suspect these test vectors, since tvpack agrees with this one to 15 decimals.
             let eps = if x > 0.0 && y > 0.0 {
                 1e-10
             } else if x == 0.0 || y == 0.0 {
@@ -279,14 +280,10 @@ mod tests {
 
             // Pr[ X > x, Y > y ] = Pr[X > x] - Pr[ X > x, Y < y ]
             // { Y < y } iff { -Y > -y }, and correlation of X and -Y  is -rho.
-            //
-            // FIXME: Figure out what's going wrong when one of x == 0, y < 0.
-            if x != 0.0 && y != 0.0 {
-                let eps = 1e-15;
-                assert_within!(+eps, val, one_minus_phi(x) - biv_norm(x,-y,-r), "n = {n}, x = {x}, y = {y}, rho = {r}");
-                let eps = 1e-15;
-                assert_within!(+eps, val, one_minus_phi(x) - one_minus_phi(-y) + biv_norm(-x,-y,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
-            }
+            let eps = 1e-15;
+            assert_within!(+eps, val, one_minus_phi(x) - biv_norm(x,-y,-r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+            let eps = 1e-15;
+            assert_within!(+eps, val, one_minus_phi(x) - one_minus_phi(-y) + biv_norm(-x,-y,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
         }
     }
 
@@ -306,14 +303,10 @@ mod tests {
 
             // Pr[ X > x, Y > y ] = Pr[X > x] - Pr[ X > x, Y < y ]
             // { Y < y } iff { -Y > -y }, and correlation of X and -Y  is -rho.
-            //
-            // FIXME: Figure out what's going wrong when one of x == 0, y < 0.
-            if x != 0.0 && y != 0.0 {
-                let eps = 1e-15;
-                assert_within!(+eps, val, one_minus_phi(x) - biv_norm(x,-y,-r), "n = {n}, x = {x}, y = {y}, rho = {r}");
-                let eps = 1e-15;
-                assert_within!(+eps, val, one_minus_phi(x) - one_minus_phi(-y) + biv_norm(-x,-y,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
-            }
+            let eps = 1e-15;
+            assert_within!(+eps, val, one_minus_phi(x) - biv_norm(x,-y,-r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+            let eps = 1e-15;
+            assert_within!(+eps, val, one_minus_phi(x) - one_minus_phi(-y) + biv_norm(-x,-y,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
         }
     }
 }
