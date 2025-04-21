@@ -1,9 +1,9 @@
 [package]
 name = "owens-t"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 authors = ["Chris Beck <beck.ct@gmail.com>"]
-keywords = ["stats", "math", "numerics", "pdf", "no_std"]
+keywords = ["stats", "math", "numerics", "libm", "no_std"]
 categories = ["mathematics"]
 description = "Owen's T Function and Bivariate Normal CDF computations"
 license = "MIT OR Apache-2.0"
