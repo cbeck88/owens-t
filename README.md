@@ -1,6 +1,13 @@
 owens-t
 =======
 
+[![Crates.io](https://img.shields.io/crates/v/owens-t?style=flat-square)](https://crates.io/crates/owens-t)
+[![Crates.io](https://img.shields.io/crates/d/owens-t?style=flat-square)](https://crates.io/crates/owens-t)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)](LICENSE-APACHE)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE-MIT)
+
+[API Docs](https://docs.rs/owens-t/latest)
+
 This crate provides an implementation of:
 
  * [Owen's T function](https://en.wikipedia.org/wiki/Owen%27s_T_function)
