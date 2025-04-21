@@ -9,5 +9,8 @@ mod bivariate_normal;
 mod owens_t;
 mod util;
 
+#[cfg(test)]
+mod test_utils;
+
 pub use bivariate_normal::{BivNormArg, BivNormRho, biv_norm, biv_norm_inner};
 pub use owens_t::{owens_t, owens_t_inner};

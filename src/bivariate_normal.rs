@@ -12,8 +12,7 @@ fn one_minus_phi(x: f64) -> f64 {
 /// Compute bivariate normal CDF, using Owens' T function.
 /// This is Pr[ X > x, Y > y] when X and Y are standard normals of correlation coefficient `rho`.
 ///
-/// Accurate to ~15 decimals for x * y > 0.0
-/// Only 6 or 7 decimals when x * y < 0.0
+/// Accurate to ~15 decimals.
 ///
 /// Preconditions:
 ///   -1 <= rho <= 1
@@ -115,6 +114,18 @@ pub fn biv_norm_inner(
     // To do what they are saying, we don't call `owens_t` as a black-box, instead we build a function that
     // computes Q, which calls owens_t_dispatch directly.
     let (q_x, c_x) = if x == 0.0 {
+        // We get an indeterminate value for r_x when x == 0.
+        // However, Owen's T is defined even at infinity, and
+        // Owen gives T(h, infinity) = 1/2 (1 - Phi(h)) if h >= 0, 1/2 Phi(h) if h <= 0.
+        //
+        // We also have T(h, a) = T(h, -a) always.
+        //
+        // So we can evaluate:
+        // Q(h, infinity) := 1/2 [1 - Phi(h)] - T(h, infinity)
+        // = 0 if h >= 0
+        //   1/2 - Phi(h) if h < 0
+        //
+        // Since h = x = 0, either way the result is zero.
         (0.0, 0.0)
     } else {
         //let r_x = (y - rho * x) / (x * sqrt_1_minus_rho_sq);
@@ -141,10 +152,6 @@ pub fn biv_norm_inner(
         0.0
     } else if (x * y) < 0.0 {
         0.5
-    } else if
-    /*(x == 0.0 || y== 0.0) &&*/
-    x + y >= 0.0 {
-        -0.5
     } else {
         0.0
     };
@@ -202,6 +209,7 @@ fn q(h: f64, a: f64, one_minus_phi_h: f64) -> (f64, f64) {
         let one_minus_phi_ah = owens_t_znorm2(a * h);
         let one_half_if_a_negative = (s_a - 1.0) * -0.25;
         (
+            // Note: owens_t_znorm1 = erf(...) is an odd function, and we have |erf(x)| = erf(|x|).
             (s_a * owens_t_dispatch(ah_abs, a_abs.recip(), h_abs, Some(phi_h_minus_half.abs())))
                 - phi_h_minus_half * one_minus_phi_ah,
             one_half_if_a_negative,
@@ -212,208 +220,26 @@ fn q(h: f64, a: f64, one_minus_phi_h: f64) -> (f64, f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{BvndTestPoint, get_axis_test_points, get_burkardt_nbs_test_points};
     use assert_within::assert_within;
-
-    // These values from: https://people.math.sc.edu/Burkardt/cpp_src/test_values/test_values.cpp
-    // who says they come from Mathematica
-    //
-    //void bivariate_normal_cdf_values ( int &n_data, double &x, double &y,
-    //  double &r, double &fxy )
-    //
-    //****************************************************************************80
-    //
-    //  Purpose:
-    //
-    //    BIVARIATE_NORMAL_CDF_VALUES returns some values of the bivariate normal CDF.
-    //
-    //  Discussion:
-    //
-    //    FXY is the probability that two variables A and B, which are
-    //    related by a bivariate normal distribution with correlation R,
-    //    respectively satisfy A <= X and B <= Y.
-    //
-    //    Mathematica can evaluate the bivariate normal CDF via the commands:
-    //
-    //      <<MultivariateStatistics`
-    //      cdf = CDF[MultinormalDistribution[{0,0}{{1,r},{r,1}}],{x,y}]
-    //
-    //  Licensing:
-    //
-    //    This code is distributed under the GNU LGPL license.
-    //
-    //  Modified:
-    //
-    //    23 November 2010
-    //
-    //  Author:
-    //
-    //    John Burkardt
-    //
-    //  Reference:
-    //
-    //    National Bureau of Standards,
-    //    Tables of the Bivariate Normal Distribution and Related Functions,
-    //    NBS, Applied Mathematics Series, Number 50, 1959.
-    //
-    //  Parameters:
-    //
-    //    Input/output, int &N_DATA.  The user sets N_DATA to 0 before the
-    //    first call.  On each call, the routine increments N_DATA by 1, and
-    //    returns the corresponding data; when there is no more data, the
-    //    output value of N_DATA will be 0 again.
-    //
-    //    Output, double &X, &Y, the parameters of the function.
-    //
-    //    Output, double &R, the correlation value.
-    //
-    //    Output, double &FXY, the value of the function.
-    //
-
-    const N_MAX: usize = 41;
-    const FXY_VEC: [f64; N_MAX] = [
-        0.02260327218569867E+00,
-        0.1548729518584100E+00,
-        0.4687428083352184E+00,
-        0.7452035868929476E+00,
-        0.8318608306874188E+00,
-        0.8410314261134202E+00,
-        0.1377019384919464E+00,
-        0.1621749501739030E+00,
-        0.1827411243233119E+00,
-        0.2010067421506235E+00,
-        0.2177751155265290E+00,
-        0.2335088436446962E+00,
-        0.2485057781834286E+00,
-        0.2629747825154868E+00,
-        0.2770729823404738E+00,
-        0.2909261168683812E+00,
-        0.3046406378726738E+00,
-        0.3183113449213638E+00,
-        0.3320262544108028E+00,
-        0.3458686754647614E+00,
-        0.3599150462310668E+00,
-        0.3742210899871168E+00,
-        0.3887706405282320E+00,
-        0.4032765198361344E+00,
-        0.4162100291953678E+00,
-        0.6508271498838664E+00,
-        0.8318608306874188E+00,
-        0.0000000000000000,
-        0.1666666666539970,
-        0.2500000000000000,
-        0.3333333333328906,
-        0.5000000000000000,
-        0.7452035868929476,
-        0.1548729518584100,
-        0.1548729518584100,
-        0.06251409470431653,
-        0.7452035868929476,
-        0.1548729518584100,
-        0.1548729518584100,
-        0.06251409470431653,
-        0.6337020457912916,
-    ];
-    const R_VEC: [f64; N_MAX] = [
-        0.500, 0.500, 0.500, 0.500, 0.500, 0.500, -0.900, -0.800, -0.700, -0.600, -0.500, -0.400,
-        -0.300, -0.200, -0.100, 0.000, 0.100, 0.200, 0.300, 0.400, 0.500, 0.600, 0.700, 0.800,
-        0.900, 0.673, 0.500, -1.000, -0.500, 0.000, 0.500, 1.000, 0.500, 0.500, 0.500, 0.500,
-        0.500, 0.500, 0.500, 0.500, 0.500,
-    ];
-    const X_VEC: [f64; N_MAX] = [
-        -2.0,
-        -1.0,
-        0.0,
-        1.0,
-        2.0,
-        3.0,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        -0.2,
-        1.0,
-        2.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        1.0,
-        -1.0,
-        -1.0,
-        1.0,
-        1.0,
-        -1.0,
-        -1.0,
-        0.7071067811865475,
-    ];
-    const Y_VEC: [f64; N_MAX] = [
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        1.0,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        0.5,
-        1.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
-        -1.0,
-        1.0,
-        -1.0,
-        1.0,
-        -1.0,
-        1.0,
-        -1.0,
-        0.7071067811865475,
-    ];
+    use rand::Rng;
+    use rand_pcg::{Pcg64Mcg, rand_core::SeedableRng};
 
     #[test]
-    fn spot_check_phi2() {
-        for n in 0..N_MAX {
-            // These are negated, see documentation of these test points
-            let x = -X_VEC[n];
-            let y = -Y_VEC[n];
-            let r = R_VEC[n];
-            let expected = FXY_VEC[n];
+    fn spot_check_biv_norm_against_axis_points() {
+        for (n, BvndTestPoint { x, y, r, expected }) in get_axis_test_points().enumerate() {
+            let eps = 1e-15;
+
+            let val = biv_norm(x, y, r);
+            //eprintln!("n = {n}: biv_norm({x}, {y}, {r}) = {val}: expected: {fxy}");
+            assert_within!(+eps, biv_norm(y, x, r), val, "n = {n}, x = {x}, y = {y}, rho = {r}");
+            assert_within!(+eps, val, expected, "n = {n}, x = {x}, y = {y}, rho = {r}")
+        }
+    }
+
+    #[test]
+    fn spot_check_biv_norm_against_burkardt_nbs_points() {
+        for (n, BvndTestPoint { x, y, r, expected }) in get_burkardt_nbs_test_points().enumerate() {
             let val = biv_norm(x, y, r);
 
             // FIXME: Precision should be a little better than this...
@@ -428,8 +254,66 @@ mod tests {
                 1e-7
             };
             //eprintln!("n = {n}: biv_norm({x}, {y}, {r}) = {val}: expected: {fxy}");
-            assert_within!(~eps, biv_norm(y,x,r), val);
-            assert_within!(~eps, val, expected, "n = {n}, x = {x}, y = {y}, rho = {r}")
+            assert_within!(+eps, biv_norm(y,x,r), val);
+            assert_within!(+eps, val, expected, "n = {n}, x = {x}, y = {y}, rho = {r}")
+        }
+    }
+
+    fn to_three_decimals(x: f64) -> f64 {
+        (x * 1000.0).round() / 1000.0
+    }
+
+    #[test]
+    fn check_symmetry_conditions() {
+        let mut rng = Pcg64Mcg::seed_from_u64(9);
+
+        for n in 0..10000 {
+            let x = to_three_decimals(4.0 * rng.random::<f64>() - 2.0);
+            let y = to_three_decimals(4.0 * rng.random::<f64>() - 2.0);
+            let r = to_three_decimals(rng.random::<f64>());
+
+            let val = biv_norm(x, y, r);
+            // Phi_2(x,y,r) = Phi_2(y,x,r);
+            let eps = 1e-15;
+            assert_within!(+eps, val, biv_norm(y,x,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+
+            // Pr[ X > x, Y > y ] = Pr[X > x] - Pr[ X > x, Y < y ]
+            // { Y < y } iff { -Y > -y }, and correlation of X and -Y  is -rho.
+            //
+            // FIXME: Figure out what's going wrong when one of x == 0, y < 0.
+            if x != 0.0 && y != 0.0 {
+                let eps = 1e-15;
+                assert_within!(+eps, val, one_minus_phi(x) - biv_norm(x,-y,-r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+                let eps = 1e-15;
+                assert_within!(+eps, val, one_minus_phi(x) - one_minus_phi(-y) + biv_norm(-x,-y,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+            }
+        }
+    }
+
+    #[test]
+    fn check_symmetry_conditions_wider_range() {
+        let mut rng = Pcg64Mcg::seed_from_u64(9);
+
+        for n in 0..10000 {
+            let x = to_three_decimals(8.0 * rng.random::<f64>() - 4.0);
+            let y = to_three_decimals(8.0 * rng.random::<f64>() - 4.0);
+            let r = to_three_decimals(rng.random::<f64>());
+
+            let val = biv_norm(x, y, r);
+            // Phi_2(x,y,r) = Phi_2(y,x,r);
+            let eps = 1e-15;
+            assert_within!(+eps, val, biv_norm(y,x,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+
+            // Pr[ X > x, Y > y ] = Pr[X > x] - Pr[ X > x, Y < y ]
+            // { Y < y } iff { -Y > -y }, and correlation of X and -Y  is -rho.
+            //
+            // FIXME: Figure out what's going wrong when one of x == 0, y < 0.
+            if x != 0.0 && y != 0.0 {
+                let eps = 1e-15;
+                assert_within!(+eps, val, one_minus_phi(x) - biv_norm(x,-y,-r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+                let eps = 1e-15;
+                assert_within!(+eps, val, one_minus_phi(x) - one_minus_phi(-y) + biv_norm(-x,-y,r), "n = {n}, x = {x}, y = {y}, rho = {r}");
+            }
         }
     }
 }
